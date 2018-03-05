@@ -1,9 +1,10 @@
 import logging
 import threading
 import datetime
+import pytz
 
 from importsessions.models import UpdateSession
-from datasource.models import DataSource
+from datasources.models import DataSource
 
 class UpdateSessionJob:
     TASK_TIME_LIMIT = 60 * 60 * 3  # 3 hs
@@ -20,24 +21,38 @@ class UpdateSessionJob:
         self._date_to = date_to
 
     def start(self):
-        logging.debug('UpdateSessionJob.start id=' + self._update_job.id)
         ds = DataSource.objects.filter(name="DNM - OSTOLBDA")[0]
-        self._update_job = UpdateSession.objects.create(name="import_job_" + self._date_from, from_date=datetime.datetime(self._date_from),
-                                                         to_date=datetime.datetime(self._date_to), source=ds)
+        self._update_job = UpdateSession.objects.create(name="script_reimport" + str(self._date_from),
+                                                        from_date=datetime.datetime(self._date_from.year,
+                                                                                    self._date_from.month,
+                                                                                    self._date_from.day,
+                                                                                    3,
+                                                                                    0,
+                                                                                    0,
+                                                                                    tzinfo=pytz.UTC),
+                                                        to_date=datetime.datetime(self._date_to.year,
+                                                                                  self._date_to.month,
+                                                                                  self._date_to.day,
+                                                                                  2,
+                                                                                  59,
+                                                                                  59,
+                                                                                  tzinfo=pytz.UTC),
+                                                        source=ds)
         self._update_job_reset()
 
     def _update_job_reset(self):
+        print('UpdateSessionJob.start id=' + self._update_job.id)
         self._update_job.status = UpdateSession.STATUS_READY
         self._update_job.save()
         self._set_check_timer()
 
     def check_running(self):
-        logging.debug('check_running: Will check if ' + self._update_job.id + " has finished")
+        logging.debug('check_running: Will check if ' + str(self._update_job.id) + " has finished")
         if self._update_job.status == UpdateSession.STATUS_RUNNING and self._job_elapsed_time() > UpdateSessionJob.TASK_TIME_LIMIT:
-            logging.info('UpdateSessionJob with id=' + self._update_job.id + ' will be relaunched due to time out')
+            print('UpdateSessionJob with id=' + str(self._update_job.id) + ' will be relaunched due to time out')
             self._update_job_reset()
         elif self._update_job.status == UpdateSession.STATUS_FINISHED:
-            logging.info('UpdateSessionJob with id=' + self._update_job.id + ' finished')
+            print('UpdateSessionJob with id=' + str(self._update_job.id) + ' finished')
             self.notify_job_finished(self._date_from, self._date_to)
         else:
             self._set_check_timer()
@@ -46,7 +61,10 @@ class UpdateSessionJob:
         return -1
 
     def set_finished_callback(self, callback_function):
-        self._finished_callback = callback_function
+        if callback_function:
+            self._finished_callback = callback_function
+        else:
+            logging.error('Callback for job is null!')
 
     def notify_job_finished(self):
         if self._finished_callback is not None:

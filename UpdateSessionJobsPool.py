@@ -1,4 +1,4 @@
-import UpdateSessionJob
+from UpdateSessionJob import UpdateSessionJob
 import logging
 
 class UpdateSessionJobsPool:
@@ -12,13 +12,13 @@ class UpdateSessionJobsPool:
         self._pool_size = pool_size
 
     def enqueue_job(self, date_from, date_to):
-        logging.debug('Enqueued job date_from=' + str(date_from) + ' date_to=' + str(date_to))
+        print('Enqueued job date_from=' + str(date_from) + ' date_to=' + str(date_to))
         job = UpdateSessionJob(date_from, date_to)
         job.set_finished_callback(self._finished_relaunch)
         self._queue.append(job)
 
         if self._can_start_new_job():
-            logging.debug('Can start new job!')
+            print('Can start new job!')
             self._start_next_job()
 
     def _on_job_finished(self, date_from, date_to):
@@ -35,3 +35,6 @@ class UpdateSessionJobsPool:
 
     def set_relaunch_function(self, finished_relaunch_function):
         self._finished_relaunch = finished_relaunch_function
+
+    def has_pending_items(self):
+        return self._jobs_running > 0 or len(self._queue) > 0
